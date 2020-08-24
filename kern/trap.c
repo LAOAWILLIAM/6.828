@@ -66,6 +66,48 @@ trap_init(void)
 
 	// LAB 3: Your code here.
 
+    // DPL should be 3 allowing application level accesses it
+    void DIVIDE();
+    SETGATE(idt[T_DIVIDE], 0, GD_KT, DIVIDE, 0);
+    void DEBUG();
+    SETGATE(idt[T_DEBUG], 0, GD_KT, DEBUG, 3);
+    void NMI();
+    SETGATE(idt[T_NMI], 0, GD_KT, NMI, 0);
+    void BRKPT();
+    SETGATE(idt[T_BRKPT], 0, GD_KT, BRKPT, 3);
+    void OFLOW();
+    SETGATE(idt[T_OFLOW], 0, GD_KT, OFLOW, 0);
+    void BOUND();
+    SETGATE(idt[T_BOUND], 0, GD_KT, BOUND, 0);
+    void ILLOP();
+    SETGATE(idt[T_ILLOP], 0, GD_KT, ILLOP, 0);
+    void DEVICE();
+    SETGATE(idt[T_DEVICE], 0, GD_KT, DEVICE, 0);
+    void DBLFLT();
+    SETGATE(idt[T_DBLFLT], 0, GD_KT, DBLFLT, 0);
+    void TSS();
+    SETGATE(idt[T_TSS], 0, GD_KT, TSS, 0);
+    void SEGNP();
+    SETGATE(idt[T_SEGNP], 0, GD_KT, SEGNP, 0);
+    void STACK();
+    SETGATE(idt[T_STACK], 0, GD_KT, STACK, 0);
+    void GPFLT();
+    SETGATE(idt[T_GPFLT], 0, GD_KT, GPFLT, 0);
+    void PGFLT();
+    SETGATE(idt[T_PGFLT], 0, GD_KT, PGFLT, 0);
+    void FPERR();
+    SETGATE(idt[T_FPERR], 0, GD_KT, FPERR, 0);
+    void ALIGN();
+    SETGATE(idt[T_ALIGN], 0, GD_KT, ALIGN, 0);
+    void MCHK();
+    SETGATE(idt[T_MCHK], 0, GD_KT, MCHK, 0);
+    void SIMDERR();
+    SETGATE(idt[T_SIMDERR], 0, GD_KT, SIMDERR, 0);
+    void SYSCALL();
+    SETGATE(idt[T_SYSCALL], 0, GD_KT, SYSCALL, 3);
+    void DEFAULT();
+    SETGATE(idt[T_DEFAULT], 0, GD_KT, DEFAULT, 0);
+
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -144,15 +186,42 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
-
-	// Unexpected trap: The user process or the kernel has a bug.
-	print_trapframe(tf);
-	if (tf->tf_cs == GD_KT)
-		panic("unhandled trap in kernel");
-	else {
-		env_destroy(curenv);
-		return;
-	}
+	switch (tf->tf_trapno) {
+        case (T_PGFLT):
+            page_fault_handler(tf);
+            break;
+        case (T_BRKPT):
+            monitor(tf);
+            break;
+        case (T_DEBUG):
+            monitor(tf);
+            break;
+        case (T_SYSCALL): {
+            // here we cannot take tf_regs as a struct but a struct pointer
+            // so that we actually do operations on the real struct area !!!
+            struct PushRegs *tf_regs = &tf->tf_regs;
+            // %eax, %edx, %ecx, %ebx, %edi, and %esi
+            int32_t res = syscall(
+                    tf_regs->reg_eax,
+                    tf_regs->reg_edx,
+                    tf_regs->reg_ecx,
+                    tf_regs->reg_ebx,
+                    tf_regs->reg_edi,
+                    tf_regs->reg_esi
+            );
+            tf_regs->reg_eax = res;
+            break;
+        }
+        default:
+            // Unexpected trap: The user process or the kernel has a bug.
+            print_trapframe(tf);
+            if (tf->tf_cs == GD_KT)
+                panic("unhandled trap in kernel");
+            else {
+                env_destroy(curenv);
+                return;
+            }
+    }
 }
 
 void
@@ -205,6 +274,8 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
+	if ((tf->tf_cs & 3) == 0)
+	    panic("kernel fault va %08x\n", fault_va);
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.

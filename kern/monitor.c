@@ -26,6 +26,8 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
     { "backtrace", "Backtrace", mon_backtrace },
+    { "continue", "Continue instructions", mon_continue },
+    { "stepi", "Single-step one instruction", mon_stepi }
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -65,7 +67,10 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
     uint32_t ebp = read_ebp();
     uint32_t *cur_ebp_address = (uint32_t *)(ebp);
 
-    while (cur_ebp_address != 0x0) {
+//    cprintf("%08x, %08x, %08x, %08x, %08x, %08x\n",
+//            tf->tf_ss, tf->tf_cs, tf->tf_ds, tf->tf_es, tf->tf_esp, tf->tf_eip);
+
+    while (true) {
         struct Eipdebuginfo info;
         uint32_t eip = *(cur_ebp_address + 1);
         cprintf("ebp %08x  eip %08x  args %08x %08x %08x %08x %08x\n",
@@ -86,13 +91,48 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
         } else {
             cprintf("\t\n");
         }
+        // kernel page fault here fixed by not allowing cur_ebp_address beyond tf_esp
+        if (cur_ebp_address == (void *) tf->tf_esp) break;
         cur_ebp_address = (uint32_t *)(*cur_ebp_address);
     }
 
 	return 0;
 }
 
+int
+mon_continue(int argc, char **argv, struct Trapframe *tf) {
+    if (!tf) {
+        cprintf("mon_continue: tf is null\n");
+        return 0;
+    }
+    tf->tf_eflags &= ~(FL_TF);
+    return -1;
+}
 
+int
+mon_stepi(int argc, char **argv, struct Trapframe *tf) {
+    if (!tf) {
+        cprintf("mon_stepi: tf is null\n");
+        return 0;
+    }
+
+    struct Eipdebuginfo info;
+    uint32_t eip = tf->tf_eip;
+
+    if (debuginfo_eip(eip, &info) == 0) {
+        cprintf("%s:%d: %.*s+%d\n",
+                info.eip_file,
+                info.eip_line,
+                info.eip_fn_namelen,
+                info.eip_fn_name,
+                eip - info.eip_fn_addr);
+    } else {
+        cprintf("\n");
+    }
+
+    tf->tf_eflags |= (FL_TF);
+    return -1;
+}
 
 /***** Kernel monitor command interpreter *****/
 
