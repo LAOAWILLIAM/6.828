@@ -276,7 +276,10 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
-
+	for (int i = 0; i < NCPU; i++) {
+        uintptr_t kstacktop_i = KSTACKTOP - i * (KSTKSIZE + KSTKGAP);
+        boot_map_region(kern_pgdir, kstacktop_i - KSTKSIZE, KSTKSIZE, PADDR(percpu_kstacks[i]), PTE_W);
+    }
 }
 
 // --------------------------------------------------------------
@@ -323,6 +326,7 @@ page_init(void)
 //		page_free_list = &pages[i];
 //	}
 
+    extern unsigned char mpentry_start[], mpentry_end[];
     size_t i;
     for (i = 1; i < npages; i++) {
         if (i == 0) {
@@ -330,6 +334,8 @@ page_init(void)
         } else if (i >= IOPHYSMEM / PGSIZE && i < EXTPHYSMEM / PGSIZE) {
             pages[i].pp_ref = 1;
         } else if (i >= EXTPHYSMEM / PGSIZE && i < PADDR(boot_alloc(0)) / PGSIZE) {
+            pages[i].pp_ref = 1;
+        } else if (i >= MPENTRY_PADDR / PGSIZE && i <= (MPENTRY_PADDR + ROUNDUP(mpentry_end - mpentry_start, PGSIZE)) / PGSIZE) {
             pages[i].pp_ref = 1;
         } else {
             pages[i].pp_ref = 0;
@@ -600,7 +606,15 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+//	panic("mmio_map_region not implemented");
+
+    size_t round_size = ROUNDUP(size, PGSIZE);
+    if (base + round_size > MMIOLIM)
+        panic("reserved region overflow MMIOLIM\n");
+    boot_map_region(kern_pgdir, base, round_size, pa, PTE_PCD | PTE_PWT | PTE_W);
+    void *ret_base = (void *) base;
+    base += round_size;
+    return ret_base;
 }
 
 static uintptr_t user_mem_check_addr;
