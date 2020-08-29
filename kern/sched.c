@@ -29,8 +29,8 @@ sched_yield(void)
 	// below to halt the cpu.
 
 	// LAB 4: Your code here.
-	struct Env *start = (curenv == NULL) ? envs : curenv + 1;
-    struct Env *e = start;
+	idle = (curenv == NULL) ? envs : curenv + 1;
+    struct Env *e = idle;
     for (; e < envs + NENV; e++) {
         if (e->env_status == ENV_RUNNABLE) {
             env_run(e);
@@ -38,7 +38,7 @@ sched_yield(void)
         }
     }
 
-    for (e = envs; e < start; e++) {
+    for (e = envs; e < idle; e++) {
         if (e->env_status == ENV_RUNNABLE) {
             env_run(e);
             return;
@@ -95,7 +95,7 @@ sched_halt(void)
 		"pushl $0\n"
 		"pushl $0\n"
 		// Uncomment the following line after completing exercise 13
-		//"sti\n"
+		"sti\n"
 		"1:\n"
 		"hlt\n"
 		"jmp 1b\n"

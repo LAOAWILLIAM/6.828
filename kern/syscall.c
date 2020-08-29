@@ -143,7 +143,16 @@ static int
 sys_env_set_pgfault_upcall(envid_t envid, void *func)
 {
 	// LAB 4: Your code here.
-	panic("sys_env_set_pgfault_upcall not implemented");
+//	panic("sys_env_set_pgfault_upcall not implemented");
+
+    struct Env *env_store = NULL;
+    int res = envid2env(envid, &env_store, 1);
+    if (res == 0) {
+        env_store->env_pgfault_upcall = func;
+        return 0;
+    }
+
+    return res;
 }
 
 // Allocate a page of memory and map it at 'va' with permission
@@ -337,7 +346,9 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+//	panic("sys_ipc_try_send not implemented");
+
+
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -355,7 +366,10 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
+//	panic("sys_ipc_recv not implemented");
+
+
+
 	return 0;
 }
 
@@ -392,6 +406,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_page_map((envid_t) a1, (void *) a2, (envid_t) a3, (void *) a4, (int) a5);
         case SYS_page_unmap:
             return sys_page_unmap((envid_t) a1, (void *) a2);
+        case SYS_env_set_pgfault_upcall:
+            return sys_env_set_pgfault_upcall((envid_t) a1, (void *) a2);
         case NSYSCALLS:
             return 0;
         default:
