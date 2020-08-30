@@ -305,7 +305,6 @@ trap_dispatch(struct Trapframe *tf)
                 return;
             }
     }
->>>>>>> lab4
 }
 
 void
