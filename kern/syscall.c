@@ -384,6 +384,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
     dstenv_store->env_ipc_from = curenv->env_id;
     dstenv_store->env_ipc_value = value;
     dstenv_store->env_ipc_perm = (uintptr_t) srcva < UTOP ? perm : 0;
+    // here return value of paused sys_ipc_recv is set
     dstenv_store->env_tf.tf_regs.reg_eax = 0;
     dstenv_store->env_status = ENV_RUNNABLE;
 
@@ -417,6 +418,7 @@ sys_ipc_recv(void *dstva)
 
     sys_yield();
 
+    // here we can return any int number, including negative ones, as we will not get here
 	return 0;
 }
 
