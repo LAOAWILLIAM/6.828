@@ -82,7 +82,12 @@ duppage(envid_t envid, unsigned pn)
     // calculate virtual memory based on page number
     void *addr = (void *) (pn * PGSIZE);
 
-    if (uvpt[pn] & PTE_W || uvpt[pn] & PTE_COW) {
+    if (uvpt[pn] & PTE_SHARE) {
+        if ((r = sys_page_map(thisenv->env_id, addr, envid, addr, uvpt[pn] & PTE_SYSCALL)) < 0) {
+            panic("sys_page_map: %e", r);
+            return r;
+        }
+    } else if (uvpt[pn] & PTE_W || uvpt[pn] & PTE_COW) {
         // here we cannot use curenv, as it is a kernel-level variable rather than a user-level variable
 
         // map the new page to child and mark it COW in child
@@ -152,7 +157,7 @@ fork(void)
 
     // Copy parent address space to child
     for (int i = 0; i < PGNUM(USTACKTOP); i++) {
-        if ( (uvpd[PDX(i * PGSIZE)] & PTE_P) && (uvpt[i] & PTE_P)) {
+        if ((uvpd[PDX(i * PGSIZE)] & PTE_P) && (uvpt[i] & PTE_P)) {
             if ((r = duppage(envid, i)) < 0)
                 panic("fork: duppage: %e", r);
         }

@@ -103,6 +103,7 @@ int	pageref(void *addr);
 // spawn.c
 envid_t	spawn(const char *program, const char **argv);
 envid_t	spawnl(const char *program, const char *arg0, ...);
+int exec(const char *prog, const char *arg0, ...);
 
 // console.c
 void	cputchar(int c);

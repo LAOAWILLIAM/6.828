@@ -252,9 +252,6 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
 
-	// Handle keyboard and serial interrupts.
-	// LAB 5: Your code here.
-
     switch (tf->tf_trapno) {
         // Handle spurious interrupts
         // The hardware sometimes raises these because of noise on the
@@ -269,6 +266,14 @@ trap_dispatch(struct Trapframe *tf)
         case (IRQ_OFFSET + IRQ_TIMER):
             lapic_eoi();
             sched_yield();
+            return;
+        // Handle keyboard and serial interrupts.
+        // LAB 5: Your code here.
+        case (IRQ_OFFSET+IRQ_KBD):
+            kbd_intr();
+            return;
+        case (IRQ_OFFSET+IRQ_SERIAL):
+            serial_intr();
             return;
         case (T_PGFLT):
             page_fault_handler(tf);
