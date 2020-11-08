@@ -10,6 +10,8 @@
 #include <kern/trap.h>
 #include <kern/picirq.h>
 
+#include <kern/env.h>
+
 static void cons_intr(int (*proc)(void));
 static void cons_putc(int c);
 
@@ -408,6 +410,9 @@ cons_intr(int (*proc)(void))
 	while ((c = (*proc)()) != -1) {
 		if (c == 0)
 			continue;
+		if (c == 3) {
+            env_destroy(curenv);
+        }
 		cons.buf[cons.wpos++] = c;
 		if (cons.wpos == CONSBUFSIZE)
 			cons.wpos = 0;

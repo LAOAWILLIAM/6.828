@@ -429,6 +429,7 @@ page_fault_handler(struct Trapframe *tf)
         } else {
             utf = (struct UTrapframe *) (UXSTACKTOP - sizeof(struct UTrapframe));
         }
+//        cprintf("page_fault_handler: env %08x enter user_mem_assert\n", curenv->env_id);
         user_mem_assert(curenv, (const void *) utf, sizeof(struct UTrapframe), PTE_W | PTE_P);
 
         utf->utf_fault_va = fault_va;
@@ -441,6 +442,7 @@ page_fault_handler(struct Trapframe *tf)
         curenv->env_tf.tf_eip = (uintptr_t) curenv->env_pgfault_upcall;
         curenv->env_tf.tf_esp = (uintptr_t) utf;
 
+//        cprintf("page_fault_handler: env %08x continues to run\n", curenv->env_id);
         env_run(curenv);
     }
 

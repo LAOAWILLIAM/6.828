@@ -170,7 +170,7 @@ exec(const char *prog, const char *arg0, ...)
         argv[j+1] = va_arg(vl, const char *);
     va_end(vl);
 
-    cprintf("exec: start\n");
+    cprintf("exec: start at env: %08x\n", thisenv->env_id);
     unsigned char elf_buf[512];
     struct Trapframe child_tf;
     envid_t child = thisenv->env_id;
@@ -185,6 +185,7 @@ exec(const char *prog, const char *arg0, ...)
         return r;
     fd = r;
 
+    cprintf("exec: read elf header\n");
     // Read elf header
     elf = (struct Elf*) elf_buf;
     if (readn(fd, elf_buf, sizeof(elf_buf)) != sizeof(elf_buf)
@@ -194,6 +195,7 @@ exec(const char *prog, const char *arg0, ...)
         return -E_NOT_EXEC;
     }
 
+    cprintf("exec: set up trap frame\n");
     // Set up trap frame, including initial stack.
     child_tf = envs[ENVX(child)].env_tf;
     child_tf.tf_eip = elf->e_entry;
@@ -202,33 +204,33 @@ exec(const char *prog, const char *arg0, ...)
     if ((r = init_stack(child, argv, &child_tf.tf_esp)) < 0)
         return r;
 
-    cprintf("exec: map segments\n");
-    // Set up program segments as defined in ELF header.
-    ph = (struct Proghdr*) (elf_buf + elf->e_phoff);
-    for (i = 0; i < elf->e_phnum; i++, ph++) {
-        if (ph->p_type != ELF_PROG_LOAD)
-            continue;
-        perm = PTE_P | PTE_U;
-        if (ph->p_flags & ELF_PROG_FLAG_WRITE)
-            perm |= PTE_W;
-        if ((r = map_segment(child, ph->p_va, ph->p_memsz,
-                             fd, ph->p_filesz, ph->p_offset, perm)) < 0)
-            goto error;
-    }
-    close(fd);
-    fd = -1;
+//    cprintf("exec: map segments\n");
+//    // Set up program segments as defined in ELF header.
+//    ph = (struct Proghdr*) (elf_buf + elf->e_phoff);
+//    for (i = 0; i < elf->e_phnum; i++, ph++) {
+//        if (ph->p_type != ELF_PROG_LOAD)
+//            continue;
+//        perm = PTE_P | PTE_U;
+//        if (ph->p_flags & ELF_PROG_FLAG_WRITE)
+//            perm |= PTE_W;
+//        if ((r = map_segment(child, ph->p_va, ph->p_memsz,
+//                             fd, ph->p_filesz, ph->p_offset, perm)) < 0)
+//            goto error;
+//    }
+//    close(fd);
+//    fd = -1;
 
-    cprintf("exec: copy_shared_pages\n");
-    // Copy shared library state.
-    if ((r = copy_shared_pages(child)) < 0)
-        panic("copy_shared_pages: %e", r);
-
-    child_tf.tf_eflags |= FL_IOPL_3;   // devious: see user/faultio.c
-    if ((r = sys_env_set_trapframe(child, &child_tf)) < 0)
-        panic("sys_env_set_trapframe: %e", r);
-
-    if ((r = sys_env_set_status(child, ENV_RUNNABLE)) < 0)
-        panic("sys_env_set_status: %e", r);
+//    cprintf("exec: copy_shared_pages\n");
+//    // Copy shared library state.
+//    if ((r = copy_shared_pages(child)) < 0)
+//        panic("copy_shared_pages: %e", r);
+//
+//    child_tf.tf_eflags |= FL_IOPL_3;   // devious: see user/faultio.c
+//    if ((r = sys_env_set_trapframe(child, &child_tf)) < 0)
+//        panic("sys_env_set_trapframe: %e", r);
+//
+//    if ((r = sys_env_set_status(child, ENV_RUNNABLE)) < 0)
+//        panic("sys_env_set_status: %e", r);
 
     return 0;
 
@@ -306,6 +308,7 @@ init_stack(envid_t child, const char **argv, uintptr_t *init_esp)
 	if ((void*) (argv_store - 2) < (void*) UTEMP)
 		return -E_NO_MEM;
 
+    cprintf("init_stack: allocate the single stack page at UTEMP\n");
 	// Allocate the single stack page at UTEMP.
 	if ((r = sys_page_alloc(0, (void*) UTEMP, PTE_P|PTE_U|PTE_W)) < 0)
 		return r;
@@ -342,14 +345,17 @@ init_stack(envid_t child, const char **argv, uintptr_t *init_esp)
 
 	// After completing the stack, map it into the child's address space
 	// and unmap it from ours!
+    cprintf("init_stack: sys_page_map\n");
 	if ((r = sys_page_map(0, UTEMP, child, (void*) (USTACKTOP - PGSIZE), PTE_P | PTE_U | PTE_W)) < 0)
 		goto error;
+    cprintf("init_stack: sys_page_unmap\n");
 	if ((r = sys_page_unmap(0, UTEMP)) < 0)
 		goto error;
 
 	return 0;
 
 error:
+    cprintf("init_stack: enter error\n");
 	sys_page_unmap(0, UTEMP);
 	return r;
 }

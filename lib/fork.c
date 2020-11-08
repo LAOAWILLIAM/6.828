@@ -16,6 +16,7 @@ extern void _pgfault_upcall(void);
 static void
 pgfault(struct UTrapframe *utf)
 {
+//    cprintf("enter pgfault\n");
 	void *addr = (void *) utf->utf_fault_va;
 	uint32_t err = utf->utf_err;
 	int r;
@@ -31,8 +32,12 @@ pgfault(struct UTrapframe *utf)
     if((uvpd[PDX((uintptr_t)addr)] & PTE_P) != 0)
         pte = uvpt[PGNUM((uintptr_t)addr)];
 
+//    cprintf("enter 0\n");
+
 	if (!(FEC_WR & err) && !(pte & PTE_COW))
 	    panic("faulting access not a write and not a copy-on-write page\n");
+
+//    cprintf("enter 1\n");
 
     // Allocate a new page, map it at a temporary location (PFTEMP),
     // copy the data from the old page to the new page, then move the new
@@ -44,19 +49,28 @@ pgfault(struct UTrapframe *utf)
 
     // sys_getenvid here is a user-level system call so we can use it
     envid_t envid = sys_getenvid();
+//    cprintf("envid: %08x\n", envid);
     // round down addr to be page aligned to pass validation check
     uintptr_t start_addr = ROUNDDOWN((uintptr_t)addr, PGSIZE);
+
+//    cprintf("enter 2\n");
 
     // allocate a new page in child space and map it at PFTEMP
     if ((r = sys_page_alloc(envid, (void *) PFTEMP, PTE_P | PTE_U | PTE_W)) < 0)
         panic("sys_page_alloc: %e", r);
 
+//    cprintf("enter 3\n");
+
     // copy the data from the old page to the new page
     memmove((void *) PFTEMP, (void *) start_addr, PGSIZE);
+
+//    cprintf("enter 4\n");
 
     // map the old page address to the new page address to solve page fault
     if ((r = sys_page_map(envid, (void *) PFTEMP, envid, (void *) start_addr, PTE_P | PTE_U | PTE_W)) < 0)
         panic("sys_page_map: %e", r);
+
+//    cprintf("quit pgfault\n");
 
 //	panic("pgfault not implemented");
 }
@@ -96,12 +110,12 @@ duppage(envid_t envid, unsigned pn)
             return r;
         }
         // mark the page in parent COW as well if it is not COW right now
-        if (!(uvpt[pn] & PTE_COW)) {
+//        if (!(uvpt[pn] & PTE_COW)) {
             if ((r = sys_page_map(thisenv->env_id, addr, thisenv->env_id, addr, PTE_P | PTE_COW | PTE_U)) < 0) {
                 panic("sys_page_map: %e", r);
                 return r;
             }
-        }
+//        }
     } else {
         // map the new page to child but not mark it COW in child
         if ((r = sys_page_map(thisenv->env_id, addr, envid, addr, PTE_P | PTE_U)) < 0) {
@@ -184,6 +198,55 @@ sfork(void)
 {
 //	panic("sfork not implemented");
 
+    envid_t envid;
+    uint8_t *addr;
+    int r;
 
-	return -E_INVAL;
+    set_pgfault_handler(pgfault);
+    // sys_exofork is a user-level system call
+    envid = sys_exofork();
+
+    if (envid < 0)
+        panic("sys_exofork: %e", envid);
+    if (envid == 0) {
+        // We're the child.
+        // The copied value of the global variable 'thisenv'
+        // is no longer valid (it refers to the parent!).
+        // Fix it and return 0.
+        thisenv = &envs[ENVX(sys_getenvid())];
+        return 0;
+    }
+
+    // We're the parent.
+
+    // Copy parent address space to child
+    int i;
+    for (i = 0; i < PGNUM(USTACKTOP) - 1; i++) {
+        if ((uvpd[PDX(i * PGSIZE)] & PTE_P) && (uvpt[i] & PTE_P) && (uvpt[i] & PTE_U)) {
+            void *addr = (void *) (i * PGSIZE);
+            if ((r = sys_page_map(thisenv->env_id, addr, envid, addr, PTE_P | PTE_U | PTE_W)) < 0) {
+                panic("sys_page_map: %e", r);
+            }
+            if ((r = sys_page_map(thisenv->env_id, addr, thisenv->env_id, addr, PTE_P | PTE_U | PTE_W)) < 0) {
+                panic("sys_page_map: %e", r);
+            }
+        }
+    }
+
+    if ((r = duppage(envid, i)) < 0)
+        panic("fork: duppage: %e", r);
+
+    // page fault handler setup in child, alloc user exception stack space first
+    if ((r = sys_page_alloc(envid, (void *) (UXSTACKTOP - PGSIZE), PTE_SYSCALL)) < 0)
+        panic("fork: sys_page_alloc: %e", r);
+
+    // page fault handler setup in child, set page fault upcall second
+    if ((r = sys_env_set_pgfault_upcall(envid, _pgfault_upcall)) < 0)
+        panic("fork: sys_env_set_pgfault_upcall: %e", r);
+
+    // Start the child environment running
+    if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)
+        panic("fork: sys_env_set_status: %e", r);
+
+    return envid;
 }

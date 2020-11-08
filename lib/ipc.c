@@ -36,6 +36,8 @@ ipc_recv(envid_t *from_env_store, void *pg, int *perm_store)
         return r;
     }
 
+    thisenv = &envs[ENVX(sys_getenvid())];
+
     if (from_env_store)
         *from_env_store = thisenv->env_ipc_from;
 
